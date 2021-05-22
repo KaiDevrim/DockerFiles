@@ -1,0 +1,423 @@
+version: "3.0"
+services:
+  swag:
+    image: ghcr.io/linuxserver/swag
+    container_name: swag
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+      - URL=${SITE}
+      - SUBDOMAINS=wildcard,
+      - VALIDATION=dns
+      - DNSPLUGIN=cloudflare
+      - EMAIL=kai@devrim.tech
+      - EXTRA_DOMAINS=blog.devrim.tech,dvr.im,f.dvr.im
+    volumes:
+      - ${ROOT}/swag:/config
+    ports:
+      - 443:443
+      - 80:80
+    restart: unless-stopped
+
+  mc:
+    image: itzg/minecraft-server
+    container_name: minecraft
+    environment:
+      EULA: "true"
+      TYPE: PAPER
+      VERSION: 1.16.5
+      # needed for Paper versions before 1.14
+    #   CONSOLE: "false"
+    ports:
+      - 25565:25565
+    volumes:
+      - ${GAMES}/minecraft:/data
+
+  elasticsearch:
+    image: elasticsearch:7.8.0
+    container_name: elasticsearch
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --silent --fail localhost:9200/_cluster/health || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    networks:
+      - elastic
+
+  logstash:
+    image: logstash:7.8.0
+    container_name: logstash
+    environment:
+      discovery.seed_hosts: logstash
+      LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - ${ROOT}logstash/config/:/usr/share/logstash/pipeline/logstash-nginx.config
+      - ${ROOT}logstash/nginx.log:/home/nginx.log
+    ports:
+      - "5000:5000/tcp"
+      - "5000:5000/udp"
+      - "5044:5044"
+      - "9600:9600"
+    depends_on:
+      - elasticsearch
+    networks:
+      - elastic
+    command: logstash -f /usr/share/logstash/pipeline/logstash-nginx.config
+
+  kibana:
+    image: kibana:7.8.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - elastic
+
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    environment:
+      - DB_TYPE=postgres
+      - DB_HOST=gitea_db:5432
+      - DB_NAME=gitea
+      - DB_USER=${GIT_DB_USER}
+      - DB_PASSWD=${GIT_DB_PASS}
+    restart: always
+    volumes:
+      - ${ROOT}/gitea:/data
+    ports:
+      - 3000:3000
+  gitea_db:
+    image: postgres:alpine
+    container_name: gitea_db
+    environment:
+      - POSTGRES_USER=${GIT_DB_USER}
+      - POSTGRES_PASSWORD=${GIT_DB_PASS}
+      - POSTGRES_DB=gitea
+    restart: always
+    volumes:
+      - ${ROOT}/gitea/db:/var/lib/postgresql/data
+    expose:
+      - 5432
+
+  nc:
+    image: nextcloud:apache
+    container_name: nextcloud
+    restart: always
+    ports:
+      - 8090:80
+    volumes:
+      - ${ROOT}/nextcloud:/var/www/html
+    networks:
+      - redisnet
+      - dbnet
+    environment:
+      - REDIS_HOST=redis
+      - MYSQL_HOST=nc_db
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=${NC_DB_USER}
+      - MYSQL_PASSWORD=${NC_DB_PASS}
+  redis:
+    image: redis:alpine
+    container_name: nextcloud_redis
+    restart: always
+    networks:
+      - redisnet
+    expose:
+      - 6379
+  nc_db:
+    image: mariadb
+    container_name: nextcloud_db
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    restart: always
+    volumes:
+      - ${ROOT}/nextcloud/db:/var/lib/mysql
+    networks:
+      - dbnet
+    environment:
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=${NC_DB_USER}
+      - MYSQL_ROOT_PASSWORD=${NC_DB_ROOT}
+      - MYSQL_PASSWORD=${NC_DB_PASS}
+    expose:
+      - 3306
+
+  wordpress_db:
+    image: mysql:8.0.19
+    container_name: wordpress_db
+    command: "--default-authentication-plugin=mysql_native_password"
+    volumes:
+      - ${ROOT}/wordpress/db:/var/lib/mysql
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${WORDPRESS_DB_ROOT}
+      - MYSQL_DATABASE=wordpress_db
+      - MYSQL_USER=${WORDPRESS_DB_USER}
+      - MYSQL_PASSWORD=${WORDPRESS_DB_PASS}
+    expose:
+      - 3306
+      - 33060
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress
+    ports:
+      - 8060:80
+    restart: always
+    environment:
+      - WORDPRESS_DB_HOST=wordpress_db
+      - WORDPRESS_DB_USER=${WORDPRESS_DB_USER}
+      - WORDPRESS_DB_PASSWORD=${WORDPRESS_DB_PASS}
+      - WORDPRESS_DB_NAME=wordpress_db
+
+  netdata:
+    image: netdata/netdata
+    container_name: netdata
+    hostname: netdata.devrim.website # set to fqdn of host
+    ports:
+      - 19999:19999
+    restart: unless-stopped
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - ${ROOT}/netdata/config:/etc/netdata:ro
+      - ${ROOT}/netdata/lib:/var/lib/netdata
+      - ${ROOT}/netdata/cache:/var/cache/netdata
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+
+  qbittorrentvpn:
+    image: dyonr/qbittorrentvpn
+    container_name: qbitvpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    ports:
+      - 8080:8080
+    environment:
+      - LAN_NETWORK=192.168.1.0/24
+      - VPN_TYPE=openvpn
+      - VPN_ENABLED=yes
+      - INSTALL_PYTHON3=yes
+    volumes:
+      - ${ROOT}/qbittorrentvpn:/config
+      - ${HDD}/torrents:/downloads
+
+  syncthing:
+    image: ghcr.io/linuxserver/syncthing
+    container_name: syncthing
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/syncthing:/config
+      - ${HDD}/Pictures:/data1
+    ports:
+      - 8384:8384
+      - 22000:22000/tcp
+      - 22000:22000/udp
+      - 21027:21027/udp
+    # sysctls:
+    #   - net.core.rmem_max=2097152
+    restart: unless-stopped
+
+  librespeed:
+    image: ghcr.io/linuxserver/librespeed
+    container_name: librespeed
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+      - PASSWORD=${LIBRESPEED_PASS}
+    volumes:
+      - ${ROOT}/librespeed:/config
+    ports:
+      - 8040:80
+    restart: unless-stopped
+
+  speedtest:
+    container_name: speedtest
+    ports:
+      - "8010:80"
+    volumes:
+      - "${ROOT}/speedtest/config.json:/app/web/config.json:ro"
+      - ${ROOT}/speedtest/results/:/app/results
+    image: e7db/speedtest
+
+  dupeguru:
+    container_name: dupeguru
+    ports:
+      - "5800:5800"
+    volumes:
+      - "${ROOT}/dupeguru:/config:rw"
+      - "${HDD}/storage/:/storage:rw"
+    image: jlesage/dupeguru
+
+  dashboard:
+    image: phntxx/dashboard:latest
+    container_name: dashboard
+    restart: unless-stopped
+    volumes:
+      - ${ROOT}/dashboard:/app/data
+    ports:
+      - 8020:8080
+
+  your_spotify:
+    image: yooooomi/your_spotify_server
+    container_name: your_spotify
+    restart: always
+    ports:
+      - "8000:8080"
+    links:
+      - your_spotify_mongo
+    depends_on:
+      - your_spotify_mongo
+    environment:
+      - API_ENDPOINT=http://192.168.1.194:8000 # This MUST be included as a valid URL in the spotify dashboard
+      - CLIENT_ENDPOINT=http://192.168.1.194:4000
+      - SPOTIFY_PUBLIC=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_SECRET=${SPOTIFY_SECRET}
+      # - CORS=http://192.168.1.1:4000,http://localhost:4001
+      - CORS=all
+      - MONGO_ENDPOINT=mongodb://your_spotify_mongo:27017/your_spotify
+  your_spotify_mongo:
+    container_name: your_spotify_mongo
+    image: mongo
+    volumes:
+      - ${ROOT}/spotify/db:/data/db
+  your_spotify_web:
+    image: yooooomi/your_spotify_client
+    container_name: your_spotify_web
+    restart: always
+    ports:
+      - "4000:3000"
+    environment:
+      - API_ENDPOINT=http://192.168.1.194:8000
+
+  organizr:
+    image: organizr/organizr
+    container_name: organizr
+    restart: always
+    volumes:
+      - ${ROOT}/organizr:/config
+    environment:
+      - fpm="true"
+    ports:
+      - 9080:80
+
+  ghost:
+    image: ghost:3-alpine
+    container_name: ghost
+    restart: always
+    ports:
+      - 2368:2368
+    environment:
+      # see https://ghost.org/docs/config/#configuration-options
+      # database__client: sqlite
+      # database__connection__host: ghost_db
+      # database__connection__user: ${GHOST_DB_USER}
+      # database__connection__password: ${GHOST_DB_PASS}
+      # database__connection__database: ghost_db
+      # this url value is just an example, and is likely wrong for your environment!
+      url: http://localhost:2368
+      # contrary to the default mentioned in the linked documentation, this image defaults to NODE_ENV=production (so development mode needs to be explicitly specified if desired)
+      #NODE_ENV: development
+    volumes:
+      - ${ROOT}/ghost:/var/lib/ghost/content
+
+  homer:
+    image: b4bz/homer
+    #To build from source, comment previous line and uncomment below
+    #build: .
+    container_name: homer
+    volumes:
+      - ${ROOT}/homer:/www/assets
+    ports:
+      - 4040:8080
+    #environment:
+    #  - UID=1000
+    #  - GID=1000
+    restart: unless-stopped
+
+  linkding:
+    container_name: linkding
+    image: sissbruecker/linkding:latest
+    ports:
+      - 9090:9090
+    volumes:
+      - ${ROOT}/linkding:/etc/linkding/data
+
+  espial:
+    image: "jonschoning/espial:espial"
+    container_name: espial
+    ports:
+      - "3050:3000"
+    volumes:
+      - "${ROOT}/espial:/app/data"
+    environment:
+      - IP_FROM_HEADER=true
+      - SQLITE_DATABASE=/app/data/espial.sqlite3
+      - DETAILED_LOGGING=true
+      - SHOULD_LOG_ALL=true
+      # - ARCHIVE_SOCKS_PROXY_HOST=localhost
+      # - ARCHIVE_SOCKS_PROXY_PORT=8888
+      - SOURCE_CODE_URI=https://github.com/jonschoning/espial
+
+  shiori:
+    image: radhifadlillah/shiori
+    restart: always
+    container_name: shiori
+    ports:
+      - 1000:8080
+    volumes:
+      - ${ROOT}/shiori:/srv/shiroi
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - 9070:9090
+    restart: unless-stopped
+    volumes:
+      - ${ROOT}/prometheus:/etc/prometheus
+      - ${HDD}/prom_data:/prometheus
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - 3080:3000
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_NAME}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_PASS}
+    volumes:
+      - ${ROOT}/grafana:/etc/grafana/provisioning/datasources
+
+networks:
+  dbnet:
+  redisnet:
+  elastic:
+    driver: bridge
