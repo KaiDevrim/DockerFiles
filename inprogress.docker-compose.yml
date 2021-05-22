@@ -1,0 +1,154 @@
+  photoprism:
+    image: photoprism/photoprism:latest
+    container_name: photoprism
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    ports:
+      - 2342:2342
+    environment:
+      PHOTOPRISM_ADMIN_PASSWORD: "insecure" # PLEASE CHANGE: Your initial admin password (min 4 characters)
+      PHOTOPRISM_ORIGINALS_LIMIT: 1000 # File size limit for originals in MB (increase for high-res video)
+      PHOTOPRISM_HTTP_COMPRESSION: "gzip" # Improves transfer speed and bandwidth utilization (none or gzip)
+      PHOTOPRISM_DEBUG: "false" # Run in debug mode (shows additional log messages)
+      PHOTOPRISM_PUBLIC: "false" # No authentication required (disables password protection)
+      PHOTOPRISM_READONLY: "false" # Don't modify originals directory (reduced functionality)
+      PHOTOPRISM_EXPERIMENTAL: "false" # Enables experimental features
+      PHOTOPRISM_DISABLE_WEBDAV: "false" # Disables built-in WebDAV server
+      PHOTOPRISM_DISABLE_SETTINGS: "false" # Disables Settings in Web UI
+      PHOTOPRISM_DISABLE_TENSORFLOW: "false" # Disables using TensorFlow for image classification
+      PHOTOPRISM_DARKTABLE_PRESETS: "false" # Enables Darktable presets and disables concurrent RAW conversion
+      PHOTOPRISM_DETECT_NSFW: "false" # Flag photos as private that MAY be offensive (requires TensorFlow)
+      PHOTOPRISM_UPLOAD_NSFW: "true" # Allow uploads that MAY be offensive
+      # PHOTOPRISM_DATABASE_DRIVER: "sqlite"         # SQLite is an embedded database that doesn't require a server
+      PHOTOPRISM_DATABASE_DRIVER: "mysql" # Use MariaDB (or MySQL) instead of SQLite for improved performance
+      PHOTOPRISM_DATABASE_SERVER: "mariadb:3306" # MariaDB database server (hostname:port)
+      PHOTOPRISM_DATABASE_NAME: "photoprism" # MariaDB database schema name
+      PHOTOPRISM_DATABASE_USER: "photoprism" # MariaDB database user name
+      PHOTOPRISM_DATABASE_PASSWORD: "insecure" # MariaDB database user password
+      PHOTOPRISM_SITE_URL: "http://localhost:2342/" # Public PhotoPrism URL
+      PHOTOPRISM_SITE_TITLE: "PhotoPrism"
+      PHOTOPRISM_SITE_CAPTION: "Browse Your Life"
+      PHOTOPRISM_SITE_DESCRIPTION: ""
+      PHOTOPRISM_SITE_AUTHOR: ""
+      # You may optionally set a user / group id using environment variables if your Docker version or NAS does not
+      # support this natively (see next example):
+      # UID: 1000
+      # GID: 1000
+      # UMASK: 0000
+    # Uncomment and edit the following line to set a specific user / group id (native):
+    # user: "1000:1000"
+    volumes:
+      # Your photo and video files ([local path]:[container path]):
+      - "~/Pictures:/photoprism/originals"
+      # Multiple folders can be indexed by mounting them as sub-folders of /photoprism/originals:
+      # - "/mnt/Family:/photoprism/originals/Family"    # [folder_1]:/photoprism/originals/[folder_1]
+      # - "/mnt/Friends:/photoprism/originals/Friends"  # [folder_2]:/photoprism/originals/[folder_2]
+      # Mounting an import folder is optional (see docs):
+      # - "~/Import:/photoprism/import"
+      # Permanent storage for settings, index & sidecar files (DON'T REMOVE):
+      - "./storage:/photoprism/storage"
+
+  mariadb:
+    image: mariadb:10.5
+    container_name: mariadb
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    command: mysqld --transaction-isolation=READ-COMMITTED --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max-connections=512 --innodb-rollback-on-timeout=OFF --innodb-lock-wait-timeout=50
+    volumes: # Don't remove permanent storage for index database files!
+      - "${ROOT}/photoprism/database:/var/lib/mysql"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${PP_ROOT_PASSWORD}
+      MYSQL_DATABASE: photoprism
+      MYSQL_USER: ${PP_USER}
+      MYSQL_PASSWORD: ${PP_PASSWORD}
+
+  chibisafe:
+        environment:
+            CHUNK_SIZE: 90
+            SECRET: "wowfcgMHqZHwOIMLadWrKu3liyqPOOILpDLSDvuxq3YGhJmiZXJCVpnF96l11WfR"
+            ADMIN_ACCOUNT: "admin"
+            ADMIN_PASSWORD: "admin"
+            # ROUTE_PREFIX: /api
+            # RATE_LIMIT_WINDOW: 2
+            # RATE_LIMIT_MAX: 5
+            # BLOCKED_EXTENSIONS: '.jar,.exe,.msi,.com,.bat,.cmd,.scr,.ps1,.sh'
+            # UPLOAD_FOLDER: uploads
+            # MAX_LINKS_PER_ALBUM: 5
+            # META_THEME_COLOR: '#20222b'
+            # META_DESCRIPTION: 'Blazing fast file uploader and bunker written in node! 🚀'
+            # META_KEYWORDS: 'chibisafe,upload,uploader,file,vue,images,ssr,file uploader,free'
+            # META_TWITTER_HANDLE: ''
+            # SERVER_PORT: 5000
+            # WEBSITE_PORT: 5001
+            # DOMAIN: 'http://chibisafe.moe'
+            # SERVICE_NAME: chibisafe
+            # MAX_SIZE: 5000
+            # GENERATE_THUMBNAILS: 'true'
+            # GENERATE_ZIPS: 'true'
+            # STRIP_EXIF: 'true'
+            # SERVE_WITH_NODE: 'true'
+            # GENERATED_FILENAME_LENGTH: 6
+            # GENERATED_ALBUM_LENGTH: 4
+            # PUBLIC_MODE: 'false'
+            # USER_ACCOUNTS: 'true'
+            # DB_CLIENT: 'sqlite3'
+            # DB_HOST: ''
+            # DB_USER: ''
+            # DB_PASSWORD: ''
+            # DB_DATABASE: ''
+
+  linx-server:
+    container_name: linx-server
+    image: andreimarcu/linx-server
+    command: -config /data/linx-server.conf
+    volumes:
+      - /path/to/files:/data/files
+      - /path/to/meta:/data/meta
+      - /path/to/linx-server.conf:/data/linx-server.conf
+    network_mode: bridge
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  restserver:
+    image: eikek0/sharry:latest
+    container_name: sharry
+    command: /opt/sharry.conf
+    ports:
+      - "9090:9090"
+    volumes:
+      - ${PWD}/sharry.conf:/opt/sharry.conf
+    depends_on:
+      - db
+  db:
+    image: postgres:13.3
+    container_name: postgres_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=dbpass
+      - POSTGRES_DB=dbname
+
+  dailytxt:
+    image: phitux/dailytxt:latest
+    container_name: dailytxt
+    restart: always
+    environment:
+      # That's the internal container-port. You can actually use any portnumber (must match with the one at 'ports')
+      - PORT=8765
+
+      - SECRET_KEY=<openssl rand -base64 32>
+
+      # Set it to False or remove the line completely to disallow registration of new users.
+      - ALLOW_REGISTRATION=True
+    ports:
+      - "127.0.0.1:<host_port>:8765"
+      # perhaps you only want:
+      # "<host_port>:8765"
+    volumes:
+      - "</save/my/dailytxt-files/here/>:/app/data/"
