@@ -131,7 +131,7 @@ db:
     - postgres_data:/var/lib/postgresql/data/
   environment:
     - POSTGRES_USER=${SHARRY_DB_USER}
-    - POSTGRES_PASSWORD=dbpass
+    - POSTGRES_PASSWORD=${SHARRY_DB_PASS}
     - POSTGRES_DB=dbname
 
 dailytxt:
