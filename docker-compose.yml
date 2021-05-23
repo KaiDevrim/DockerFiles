@@ -114,48 +114,6 @@ services:
     expose:
       - 5432
 
-  nc:
-    image: nextcloud:apache
-    container_name: nextcloud
-    restart: always
-    ports:
-      - 8090:80
-    volumes:
-      - ${ROOT}/nextcloud:/var/www/html
-    networks:
-      - redisnet
-      - dbnet
-    environment:
-      - REDIS_HOST=redis
-      - MYSQL_HOST=nc_db
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=${NC_DB_USER}
-      - MYSQL_PASSWORD=${NC_DB_PASS}
-  redis:
-    image: redis:alpine
-    container_name: nextcloud_redis
-    restart: always
-    networks:
-      - redisnet
-    expose:
-      - 6379
-  nc_db:
-    image: mariadb
-    container_name: nextcloud_db
-    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
-    restart: always
-    volumes:
-      - ${ROOT}/nextcloud/db:/var/lib/mysql
-    networks:
-      - dbnet
-    environment:
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=${NC_DB_USER}
-      - MYSQL_ROOT_PASSWORD=${NC_DB_ROOT}
-      - MYSQL_PASSWORD=${NC_DB_PASS}
-    expose:
-      - 3306
-
   wordpress_db:
     image: mysql:8.0.19
     container_name: wordpress_db
@@ -645,7 +603,7 @@ services:
       - ${HDD}/media/incomplete-downloads:/incomplete-downloads #optional
     ports:
       - 9999:8080
-      - 9090:9090
+      - 5:9090
     restart: unless-stopped
 
   rsnapshot:
@@ -792,7 +750,7 @@ services:
       - ${ROOT}/pixapop:/config
       - ${HDD}/media/photos:/photos
     ports:
-      - 80:80
+      - 5768:80
     restart: unless-stopped
 
   papermerge:
@@ -1009,7 +967,7 @@ services:
       - ${HDD}/media/movies:/data/movies
       - /opt/vc/lib:/opt/vc/lib
     ports:
-      - 8096:8096
+      - 8098:8096
     restart: unless-stopped
 
   jackett:
@@ -1103,7 +1061,7 @@ services:
       - ${HDD}/media/downloads:/downloads
       - ${HDD}/media/music:/music
     ports:
-      - 8181:8181
+      - 8182:8181
     restart: unless-stopped
 
   freshrss:
@@ -1161,7 +1119,7 @@ services:
       # Set it to False or remove the line completely to disallow registration of new users.
       - ALLOW_REGISTRATION=True
     ports:
-      - 8765:8765"
+      - 8765:8765
       # perhaps you only want:
       # "<host_port>:8765"
     volumes:
@@ -1304,11 +1262,18 @@ services:
       - 9490:80
       - 9181:9181
       - 9999:9999
-    mem_limit: 4096m
+    # mem_limit: 4096m
     restart: unless-stopped
     depends_on:
       - elasticsearch
-      - redis
+      - diskover_redis
+
+  diskover_redis:
+    container_name: diskover_redis
+    image: redis:alpine
+    volumes:
+      - ${ROOT}/diskover/db:/data
+
 
   dillinger:
     image: ghcr.io/linuxserver/dillinger
@@ -1497,8 +1462,115 @@ services:
     volumes:
       - ${ROOT}/boinc:/config
     ports:
-      - 8080:8080
+      - 8123:8080
     restart: unless-stopped
+
+  beets:
+    image: ghcr.io/linuxserver/beets
+    container_name: beets
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/beets/:/config
+      - ${HDD}/media/music:/music
+      - ${HDD}/media/downloads:/downloads
+    ports:
+      - 8337:8337
+    restart: unless-stopped
+
+  bazarr:
+    image: ghcr.io/linuxserver/bazarr
+    container_name: bazarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/bazarr:/config
+      - ${HDD}/media/movies:/movies
+      - ${HDD}/media/tv:/tv
+    ports:
+      - 6767:6767
+    restart: unless-stopped
+
+  audacity:
+    image: ghcr.io/linuxserver/audacity
+    container_name: audacity
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/audacity:/config
+    ports:
+      - 7824:3000
+    restart: unless-stopped
+
+  airsonic:
+    image: ghcr.io/linuxserver/airsonic
+    container_name: airsonic
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/airsonic:/config
+      - ${HDD}/media/music:/music
+      - ${HDD}/media/playlists:/playlists
+      - ${HDD}/media/podcasts:/podcasts
+      - ${HDD}/media/other:/media
+    ports:
+      - 4040:4040
+    restart: unless-stopped
+
+  wireshark:
+    image: ghcr.io/linuxserver/wireshark
+    container_name: wireshark
+    cap_add:
+      - NET_ADMIN
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/wireshark:/config
+    ports:
+      - 7823:3000
+    restart: unless-stopped
+
+  wikijs:
+    image: ghcr.io/linuxserver/wikijs
+    container_name: wikijs
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/wikijs:/config
+      - ${HDD}/apps/wikijs:/data
+    ports:
+      - 2308:3000
+    restart: unless-stopped
+
+  webtop:
+    image: ghcr.io/linuxserver/webtop
+    container_name: webtop
+    privileged: true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/webtop:/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 9804:3000
+    shm_size: "1gb"
+    restart: unless-stopped
+
 
 networks:
   dbnet:
