@@ -283,38 +283,6 @@ services:
     ports:
       - 8020:8080
 
-  your_spotify:
-    image: yooooomi/your_spotify_server
-    container_name: your_spotify
-    restart: always
-    ports:
-      - "8000:8080"
-    links:
-      - your_spotify_mongo
-    depends_on:
-      - your_spotify_mongo
-    environment:
-      - API_ENDPOINT=http://192.168.1.194:8000 # This MUST be included as a valid URL in the spotify dashboard
-      - CLIENT_ENDPOINT=http://192.168.1.194:4000
-      - SPOTIFY_PUBLIC=${SPOTIFY_CLIENT_ID}
-      - SPOTIFY_SECRET=${SPOTIFY_SECRET}
-      # - CORS=http://192.168.1.1:4000,http://localhost:4001
-      - CORS=all
-      - MONGO_ENDPOINT=mongodb://your_spotify_mongo:27017/your_spotify
-  your_spotify_mongo:
-    container_name: your_spotify_mongo
-    image: mongo
-    volumes:
-      - ${ROOT}/spotify/db:/data/db
-  your_spotify_web:
-    image: yooooomi/your_spotify_client
-    container_name: your_spotify_web
-    restart: always
-    ports:
-      - "4000:3000"
-    environment:
-      - API_ENDPOINT=http://192.168.1.194:8000
-
   organizr:
     image: organizr/organizr
     container_name: organizr
@@ -415,6 +383,74 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GF_PASS}
     volumes:
       - ${ROOT}/grafana:/etc/grafana/provisioning/datasources
+
+  photoprism:
+    image: photoprism/photoprism:latest
+    container_name: photoprism
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    ports:
+      - 2342:2342
+    environment:
+      PHOTOPRISM_ADMIN_PASSWORD: "${PP_ROOT_PASSWORD}" # PLEASE CHANGE: Your initial admin password (min 4 characters)
+      PHOTOPRISM_ORIGINALS_LIMIT: 4028 # File size limit for originals in MB (increase for high-res video)
+      PHOTOPRISM_HTTP_COMPRESSION: "gzip" # Improves transfer speed and bandwidth utilization (none or gzip)
+      PHOTOPRISM_DEBUG: "true" # Run in debug mode (shows additional log messages)
+      PHOTOPRISM_PUBLIC: "false" # No authentication required (disables password protection)
+      PHOTOPRISM_READONLY: "false" # Don't modify originals directory (reduced functionality)
+      PHOTOPRISM_EXPERIMENTAL: "true" # Enables experimental features
+      PHOTOPRISM_DISABLE_WEBDAV: "false" # Disables built-in WebDAV server
+      PHOTOPRISM_DISABLE_SETTINGS: "false" # Disables Settings in Web UI
+      PHOTOPRISM_DISABLE_TENSORFLOW: "false" # Disables using TensorFlow for image classification
+      PHOTOPRISM_DARKTABLE_PRESETS: "false" # Enables Darktable presets and disables concurrent RAW conversion
+      PHOTOPRISM_DETECT_NSFW: "false" # Flag photos as private that MAY be offensive (requires TensorFlow)
+      PHOTOPRISM_UPLOAD_NSFW: "true" # Allow uploads that MAY be offensive
+      # PHOTOPRISM_DATABASE_DRIVER: "sqlite"         # SQLite is an embedded database that doesn't require a server
+      PHOTOPRISM_DATABASE_DRIVER: "mariadb" # Use MariaDB (or MySQL) instead of SQLite for improved performance
+      PHOTOPRISM_DATABASE_SERVER: "prism_mariadb:3306" # MariaDB database server (hostname:port)
+      PHOTOPRISM_DATABASE_NAME: "photoprism" # MariaDB database schema name
+      PHOTOPRISM_DATABASE_USER: "${PP_USER}" # MariaDB database user name
+      PHOTOPRISM_DATABASE_PASSWORD: "${PP_PASSWORD}" # MariaDB database user password
+      PHOTOPRISM_SITE_URL: "http://192.168.1.194:2342/" # Public PhotoPrism URL
+      PHOTOPRISM_SITE_TITLE: "Kai's Photos"
+      PHOTOPRISM_SITE_CAPTION: "Browse Kai's Life"
+      PHOTOPRISM_SITE_DESCRIPTION: "Photos by Kai"
+      PHOTOPRISM_SITE_AUTHOR: "Kai Devrim"
+      # You may optionally set a user / group id using environment variables if your Docker version or NAS does not
+      # support this natively (see next example):
+      # UID: 1000
+      # GID: 1000
+      # UMASK: 0000
+    # Uncomment and edit the following line to set a specific user / group id (native):
+    # user: "1000:1000"
+    volumes:
+      # Your photo and video files ([local path]:[container path]):
+      - "${HDD}/photoprism/:/photoprism/originals"
+      # Multiple folders can be indexed by mounting them as sub-folders of /photoprism/originals:
+      # - "/mnt/Family:/photoprism/originals/Family"    # [folder_1]:/photoprism/originals/[folder_1]
+      # - "/mnt/Friends:/photoprism/originals/Friends"  # [folder_2]:/photoprism/originals/[folder_2]
+      # Mounting an import folder is optional (see docs):
+      - "${ROOT}/photoprism/Import:/photoprism/import"
+      # Permanent storage for settings, index & sidecar files (DON'T REMOVE):
+      - "${ROOT}/photoprism/storage:/photoprism/storage"
+
+  prism_mariadb:
+    image: mariadb:10.5
+    container_name: photoprism_mariadb
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    command: mysqld --transaction-isolation=READ-COMMITTED --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max-connections=512 --innodb-rollback-on-timeout=OFF --innodb-lock-wait-timeout=50
+    volumes: # Don't remove permanent storage for index database files!
+      - "${ROOT}/photoprism/database:/var/lib/mysql"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${PP_ROOT_PASSWORD}
+      MYSQL_DATABASE: photoprism
+      MYSQL_USER: ${PP_USER}
+      MYSQL_PASSWORD: ${PP_PASSWORD}
 
 networks:
   dbnet:

@@ -1,1322 +1,1160 @@
-  photoprism:
-    image: photoprism/photoprism:latest
-    container_name: photoprism
-    restart: unless-stopped
-    security_opt:
-      - seccomp:unconfined
-      - apparmor:unconfined
-    ports:
-      - 2342:2342
-    environment:
-      PHOTOPRISM_ADMIN_PASSWORD: "insecure" # PLEASE CHANGE: Your initial admin password (min 4 characters)
-      PHOTOPRISM_ORIGINALS_LIMIT: 1000 # File size limit for originals in MB (increase for high-res video)
-      PHOTOPRISM_HTTP_COMPRESSION: "gzip" # Improves transfer speed and bandwidth utilization (none or gzip)
-      PHOTOPRISM_DEBUG: "false" # Run in debug mode (shows additional log messages)
-      PHOTOPRISM_PUBLIC: "false" # No authentication required (disables password protection)
-      PHOTOPRISM_READONLY: "false" # Don't modify originals directory (reduced functionality)
-      PHOTOPRISM_EXPERIMENTAL: "false" # Enables experimental features
-      PHOTOPRISM_DISABLE_WEBDAV: "false" # Disables built-in WebDAV server
-      PHOTOPRISM_DISABLE_SETTINGS: "false" # Disables Settings in Web UI
-      PHOTOPRISM_DISABLE_TENSORFLOW: "false" # Disables using TensorFlow for image classification
-      PHOTOPRISM_DARKTABLE_PRESETS: "false" # Enables Darktable presets and disables concurrent RAW conversion
-      PHOTOPRISM_DETECT_NSFW: "false" # Flag photos as private that MAY be offensive (requires TensorFlow)
-      PHOTOPRISM_UPLOAD_NSFW: "true" # Allow uploads that MAY be offensive
-      # PHOTOPRISM_DATABASE_DRIVER: "sqlite"         # SQLite is an embedded database that doesn't require a server
-      PHOTOPRISM_DATABASE_DRIVER: "mysql" # Use MariaDB (or MySQL) instead of SQLite for improved performance
-      PHOTOPRISM_DATABASE_SERVER: "mariadb:3306" # MariaDB database server (hostname:port)
-      PHOTOPRISM_DATABASE_NAME: "photoprism" # MariaDB database schema name
-      PHOTOPRISM_DATABASE_USER: "photoprism" # MariaDB database user name
-      PHOTOPRISM_DATABASE_PASSWORD: "insecure" # MariaDB database user password
-      PHOTOPRISM_SITE_URL: "http://localhost:2342/" # Public PhotoPrism URL
-      PHOTOPRISM_SITE_TITLE: "PhotoPrism"
-      PHOTOPRISM_SITE_CAPTION: "Browse Your Life"
-      PHOTOPRISM_SITE_DESCRIPTION: ""
-      PHOTOPRISM_SITE_AUTHOR: ""
-      # You may optionally set a user / group id using environment variables if your Docker version or NAS does not
-      # support this natively (see next example):
-      # UID: 1000
-      # GID: 1000
-      # UMASK: 0000
-    # Uncomment and edit the following line to set a specific user / group id (native):
-    # user: "1000:1000"
-    volumes:
-      # Your photo and video files ([local path]:[container path]):
-      - "~/Pictures:/photoprism/originals"
-      # Multiple folders can be indexed by mounting them as sub-folders of /photoprism/originals:
-      # - "/mnt/Family:/photoprism/originals/Family"    # [folder_1]:/photoprism/originals/[folder_1]
-      # - "/mnt/Friends:/photoprism/originals/Friends"  # [folder_2]:/photoprism/originals/[folder_2]
-      # Mounting an import folder is optional (see docs):
-      # - "~/Import:/photoprism/import"
-      # Permanent storage for settings, index & sidecar files (DON'T REMOVE):
-      - "./storage:/photoprism/storage"
-
-  mariadb:
-    image: mariadb:10.5
-    container_name: mariadb
-    restart: unless-stopped
-    security_opt:
-      - seccomp:unconfined
-      - apparmor:unconfined
-    command: mysqld --transaction-isolation=READ-COMMITTED --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max-connections=512 --innodb-rollback-on-timeout=OFF --innodb-lock-wait-timeout=50
-    volumes: # Don't remove permanent storage for index database files!
-      - "${ROOT}/photoprism/database:/var/lib/mysql"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${PP_ROOT_PASSWORD}
-      MYSQL_DATABASE: photoprism
-      MYSQL_USER: ${PP_USER}
-      MYSQL_PASSWORD: ${PP_PASSWORD}
-
-  chibisafe:
-    environment:
-      CHUNK_SIZE: 90
-      SECRET: "wowfcgMHqZHwOIMLadWrKu3liyqPOOILpDLSDvuxq3YGhJmiZXJCVpnF96l11WfR"
-      ADMIN_ACCOUNT: "admin"
-      ADMIN_PASSWORD: "admin"
-      # ROUTE_PREFIX: /api
-      # RATE_LIMIT_WINDOW: 2
-      # RATE_LIMIT_MAX: 5
-      # BLOCKED_EXTENSIONS: '.jar,.exe,.msi,.com,.bat,.cmd,.scr,.ps1,.sh'
-      # UPLOAD_FOLDER: uploads
-      # MAX_LINKS_PER_ALBUM: 5
-      # META_THEME_COLOR: '#20222b'
-      # META_DESCRIPTION: 'Blazing fast file uploader and bunker written in node! 🚀'
-      # META_KEYWORDS: 'chibisafe,upload,uploader,file,vue,images,ssr,file uploader,free'
-      # META_TWITTER_HANDLE: ''
-      # SERVER_PORT: 5000
-      # WEBSITE_PORT: 5001
-      # DOMAIN: 'http://chibisafe.moe'
-      # SERVICE_NAME: chibisafe
-      # MAX_SIZE: 5000
-      # GENERATE_THUMBNAILS: 'true'
-      # GENERATE_ZIPS: 'true'
-      # STRIP_EXIF: 'true'
-      # SERVE_WITH_NODE: 'true'
-      # GENERATED_FILENAME_LENGTH: 6
-      # GENERATED_ALBUM_LENGTH: 4
-      # PUBLIC_MODE: 'false'
-      # USER_ACCOUNTS: 'true'
-      # DB_CLIENT: 'sqlite3'
-      # DB_HOST: ''
-      # DB_USER: ''
-      # DB_PASSWORD: ''
-      # DB_DATABASE: ''
-
-  linx-server:
-    container_name: linx-server
-    image: andreimarcu/linx-server
-    command: -config /data/linx-server.conf
-    volumes:
-      - /path/to/files:/data/files
-      - /path/to/meta:/data/meta
-      - /path/to/linx-server.conf:/data/linx-server.conf
-    network_mode: bridge
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-
-  restserver:
-    image: eikek0/sharry:latest
-    container_name: sharry
-    command: /opt/sharry.conf
-    ports:
-      - "9090:9090"
-    volumes:
-      - ${PWD}/sharry.conf:/opt/sharry.conf
-    depends_on:
-      - db
-  db:
-    image: postgres:13.3
-    container_name: postgres_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    environment:
-      - POSTGRES_USER=${SHARRY_DB_USER}
-      - POSTGRES_PASSWORD=${SHARRY_DB_PASS}
-      - POSTGRES_DB=dbname
-
-  dailytxt:
-    image: phitux/dailytxt:latest
-    container_name: dailytxt
-    restart: always
-    environment:
-      # That's the internal container-port. You can actually use any portnumber (must match with the one at 'ports')
-      - PORT=8765
-
-      - SECRET_KEY=<openssl rand -base64 32>
-
-      # Set it to False or remove the line completely to disallow registration of new users.
-      - ALLOW_REGISTRATION=True
-    ports:
-      - "127.0.0.1:<host_port>:8765"
-      # perhaps you only want:
-      # "<host_port>:8765"
-    volumes:
-      - "</save/my/dailytxt-files/here/>:/app/data/"
-
-  foldingathome:
-    image: ghcr.io/linuxserver/foldingathome
-    container_name: foldingathome
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/data:/config
-    ports:
-      - 7396:7396
-      - 36330:36330 #optional
-    restart: unless-stopped
-
-  firefox:
-    image: ghcr.io/linuxserver/firefox
-    container_name: firefox
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/config:/config
-    ports:
-      - 3000:3000
-    shm_size: "1gb"
-    restart: unless-stopped
-
-  filezilla:
-    image: ghcr.io/linuxserver/filezilla
-    container_name: filezilla
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/config:/config
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-
-  endlessh:
-    image: ghcr.io/linuxserver/endlessh
-    container_name: endlessh
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - MSDELAY=10000 #optional
-      - MAXLINES=32 #optional
-      - MAXCLIENTS=4096 #optional
-      - LOGFILE=false #optional
-    volumes:
-      - /path/to/appdata:/config #optional
-    ports:
-      - 22:2222
-    restart: unless-stopped
-
-  embystat:
-    image: ghcr.io/linuxserver/embystat
-    container_name: embystat
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/appdata/config:/config
-    ports:
-      - 6555:6555
-    restart: unless-stopped
-
-  emby:
-    image: ghcr.io/linuxserver/emby
-    container_name: emby
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/library:/config
-      - /path/to/tvshows:/data/tvshows
-      - /path/to/movies:/data/movies
-      - /opt/vc/lib:/opt/vc/lib #optional
-    ports:
-      - 8096:8096
-      - 8920:8920 #optional
-    devices:
-      - /dev/dri:/dev/dri #optional
-      - /dev/vchiq:/dev/vchiq #optional
-      - /dev/video10:/dev/video10 #optional
-      - /dev/video11:/dev/video11 #optional
-      - /dev/video12:/dev/video12 #optional
-    restart: unless-stopped
-
-  duplicati:
-    image: ghcr.io/linuxserver/duplicati
-    container_name: duplicati
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - CLI_ARGS= #optional
-    volumes:
-      - </path/to/appdata/config>:/config
-      - </path/to/backups>:/backups
-      - </path/to/source>:/source
-    ports:
-      - 8200:8200
-    restart: unless-stopped
-
-  dokuwiki:
-    image: ghcr.io/linuxserver/dokuwiki
-    container_name: dokuwiki
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/appdata/config:/config
-    ports:
-      - 80:80
-      - 443:443 #optional
-    restart: unless-stopped
-
-  diskover:
-    image: linuxserver/diskover
-    container_name: diskover
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - ES_HOST=elasticsearch
-      - ES_PORT=9200
-      - ES_USER=elastic
-      - ES_PASS=changeme
-      - RUN_ON_START=true
-      - USE_CRON=true
-    volumes:
-      - /path/to/diskover/config:/config
-      - /path/to/diskover/data:/data
-    ports:
-      - 80:80
-      - 9181:9181
-      - 9999:9999
-    mem_limit: 4096m
-    restart: unless-stopped
-    depends_on:
-      - elasticsearch
-      - redis
-
-  dillinger:
-    image: ghcr.io/linuxserver/dillinger
-    container_name: dillinger
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to configs>:/config
-    ports:
-      - 8080:8080
-    restart: unless-stopped
-
-  digikam:
-    image: ghcr.io/linuxserver/digikam
-    container_name: digikam
-    network_mode: host
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/New_York
-    volumes:
-      - /path/to/config:/config
-    ports:
-      - 3000:3000 #optional
-    restart: unless-stopped
-
-  darktable:
-    image: ghcr.io/linuxserver/darktable
-    container_name: darktable
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/config:/config
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-
-  daapd:
-    image: ghcr.io/linuxserver/daapd
-    container_name: daapd
-    network_mode: host
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to data>:/config
-      - <path to music>:/music
-    restart: unless-stopped
-
-  couchpotato:
-    image: ghcr.io/linuxserver/couchpotato
-    container_name: couchpotato
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/appdata/config:/config
-      - /path/to/downloads:/downloads
-      - /path/to/movies:/movies
-    ports:
-      - 5050:5050
-    restart: unless-stopped
-
-  cops:
-    image: ghcr.io/linuxserver/cops
-    container_name: cops
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to data>:/config
-      - <path to data>:/books
-    ports:
-      - 80:80
-    restart: unless-stopped
-
-  code-server:
-    image: ghcr.io/linuxserver/code-server
-    container_name: code-server
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - PASSWORD=password #optional
-      - HASHED_PASSWORD= #optional
-      - SUDO_PASSWORD=password #optional
-      - SUDO_PASSWORD_HASH= #optional
-      - PROXY_DOMAIN=code-server.my.domain #optional
-    volumes:
-      - /path/to/appdata/config:/config
-    ports:
-      - 8443:8443
-    restart: unless-stopped
-
-  calibre-web:
-    image: ghcr.io/linuxserver/calibre-web
-    container_name: calibre-web
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - DOCKER_MODS=linuxserver/calibre-web:calibre
-    volumes:
-      - /path/to/data:/config
-      - /path/to/calibre/library:/books
-    ports:
-      - 8083:8083
-    restart: unless-stopped
-
-  calibre:
-    image: ghcr.io/linuxserver/calibre
-    container_name: calibre
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - PASSWORD= #optional
-      - CLI_ARGS= #optional
-    volumes:
-      - /path/to/data:/config
-    ports:
-      - 8080:8080
-      - 8081:8081
-    restart: unless-stopped
-
-  bookstack:
-    image: ghcr.io/linuxserver/bookstack
-    container_name: bookstack
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - APP_URL=
-      - DB_HOST=bookstack_db
-      - DB_USER=bookstack
-      - DB_PASS=<yourdbpass>
-      - DB_DATABASE=bookstackapp
-    volumes:
-      - /path/to/data:/config
-    ports:
-      - 6875:80
-    restart: unless-stopped
-    depends_on:
-      - bookstack_db
-  bookstack_db:
-    image: ghcr.io/linuxserver/mariadb
-    container_name: bookstack_db
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - MYSQL_ROOT_PASSWORD=<yourdbpass>
-      - TZ=Europe/London
-      - MYSQL_DATABASE=bookstackapp
-      - MYSQL_USER=bookstack
-      - MYSQL_PASSWORD=<yourdbpass>
-    volumes:
-      - /path/to/data:/config
-    restart: unless-stopped
-
-  booksonic-air:
-    image: ghcr.io/linuxserver/booksonic-air
-    container_name: booksonic-air
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - CONTEXT_PATH=url-base
-    volumes:
-      - </path/to/appdata/config>:/config
-      - </path/to/audiobooks>:/audiobooks
-      - </path/to/podcasts>:/podcasts
-      - </path/to/othermedia>:/othermedia
-    ports:
-      - 4040:4040
-    restart: unless-stopped
-
-  boinc:
-    image: ghcr.io/linuxserver/boinc
-    container_name: boinc
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - PASSWORD= #optional
-    volumes:
-      - /path/to/data:/config
-    ports:
-      - 8080:8080
-    devices:
-      - /dev/dri:/dev/dri #optional
-    restart: unless-stopped
-
-  beets:
-    image: ghcr.io/linuxserver/beets
-    container_name: beets
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - </path/to/appdata/config>:/config
-      - </path/to/music/library>:/music
-      - </path/to/ingest>:/downloads
-    ports:
-      - 8337:8337
-    restart: unless-stopped
-
-  bazarr:
-    image: ghcr.io/linuxserver/bazarr
-    container_name: bazarr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/bazarr/config:/config
-      - /path/to/movies:/movies #optional
-      - /path/to/tv:/tv #optional
-    ports:
-      - 6767:6767
-    restart: unless-stopped
-
-  audacity:
-    image: ghcr.io/linuxserver/audacity
-    container_name: audacity
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/config:/config
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-
-  airsonic:
-    image: ghcr.io/linuxserver/airsonic
-    container_name: airsonic
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - CONTEXT_PATH=<URL_BASE> #optional
-      - JAVA_OPTS=<options> #optional
-    volumes:
-      - </path/to/config>:/config
-      - </path/to/music>:/music
-      - </path/to/playlists>:/playlists
-      - </path/to/podcasts>:/podcasts
-      - </path/to/other media>:/media #optional
-    ports:
-      - 4040:4040
-    devices:
-      - /dev/snd:/dev/snd #optional
-    restart: unless-stopped
-
-  wireshark:
-    image: ghcr.io/linuxserver/wireshark
-    container_name: wireshark
-    cap_add:
-      - NET_ADMIN
-    network_mode: host
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/config:/config
-    ports:
-      - 3000:3000 #optional
-    restart: unless-stopped
-
-  wikijs:
-    image: ghcr.io/linuxserver/wikijs
-    container_name: wikijs
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to config>:/config
-      - <path to data>:/data
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-
-  webtop:
-    image: ghcr.io/linuxserver/webtop
-    container_name: webtop
-    privileged: true #optional
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/data:/config
-      - /var/run/docker.sock:/var/run/docker.sock #optional
-    ports:
-      - 3000:3000
-    shm_size: "1gb" #optional
-    restart: unless-stopped
-
-  ubooquity:
-    image: ghcr.io/linuxserver/ubooquity
-    container_name: ubooquity
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - MAXMEM=<maxmem>
-    volumes:
-      - <path to data>:/config
-      - <path to books>:/books
-      - <path to comics>:/comics
-      - <path to raw files>:/files
-    ports:
-      - 2202:2202
-      - 2203:2203
-    restart: unless-stopped
-
-  tautulli:
-    image: ghcr.io/linuxserver/tautulli
-    container_name: tautulli
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to data>:/config
-    ports:
-      - 8181:8181
-    restart: unless-stopped
-
-  taisun:
-    image: linuxserver/taisun
-    container_name: taisun
-    network_mode: bridge
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-
-  synclounge:
-    image: ghcr.io/linuxserver/synclounge
-    container_name: synclounge
-    environment:
-      - TZ=Europe/London
-      - AUTH_LIST=plexuser1,plexuser2,email1,machineid1 #optional
-      - AUTOJOIN_ENABLED=false #optional
-      - AUTOJOIN_ROOM=roomname #optional
-    ports:
-      - 8088:8088
-    restart: unless-stopped
-
-  sonarr:
-    image: ghcr.io/linuxserver/sonarr
-    container_name: sonarr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/data:/config
-      - /path/to/tvseries:/tv #optional
-      - /path/to/downloadclient-downloads:/downloads #optional
-    ports:
-      - 8989:8989
-    restart: unless-stopped
-
-  mysql:
-    image: linuxserver/mariadb
-    container_name: snipe_mysql
-    restart: always
-    volumes:
-      - <path to mysql data>:/config
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - MYSQL_ROOT_PASSWORD=<secret password>
-      - MYSQL_USER=snipe
-      - MYSQL_PASSWORD=<secret user password>
-      - MYSQL_DATABASE=snipe
-  snipeit:
-    image: linuxserver/snipe-it:latest
-    container_name: snipe-it
-    restart: always
-    depends_on:
-      - mysql
-    volumes:
-      - <path to data>:/config
-    environment:
-      - NGINX_APP_URL=< your application URL IE 192.168.10.1:8080>
-      - MYSQL_PORT_3306_TCP_ADDR=mysql
-      - MYSQL_PORT_3306_TCP_PORT=3306
-      - MYSQL_DATABASE=snipe
-      - MYSQL_USER=snipe
-      - MYSQL_PASSWORD=<secret user password>
-      - PGID=1000
-      - PUID=1000
-    ports:
-      - "8080:80"
-
-  snapdrop:
-    image: ghcr.io/linuxserver/snapdrop
-    container_name: snapdrop
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to config>:/config
-    ports:
-      - 80:80
-      - 443:443
-    restart: unless-stopped
-
-  smokeping:
-    image: ghcr.io/linuxserver/smokeping
-    container_name: smokeping
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - </path/to/smokeping/config>:/config
-      - </path/to/smokeping/data>:/data
-    ports:
-      - 80:80
-    restart: unless-stopped
-
-  sickgear:
-    image: ghcr.io/linuxserver/sickgear
-    container_name: sickgear
-    environment:
-      - PUID=1000
-      - PGID=1000
-    volumes:
-      - /path/to/data:/config
-      - /path/to/data:/tv
-      - /path/to/data:/downloads
-    ports:
-      - 8081:8081
-    restart: unless-stopped
-
-  sickchill:
-    image: ghcr.io/linuxserver/sickchill
-    container_name: sickchill
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/data:/config
-      - /path/to/data:/downloads
-      - /path/to/data:/tv
-    ports:
-      - 8081:8081
-    restart: unless-stopped
-
-  scrutiny:
-    image: ghcr.io/linuxserver/scrutiny
-    container_name: scrutiny
-    cap_add:
-      - SYS_RAWIO
-      - SYS_ADMIN #optional
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - SCRUTINY_API_ENDPOINT=http://localhost:8080
-      - SCRUTINY_WEB=true
-      - SCRUTINY_COLLECTOR=true
-    volumes:
-      - /path/to/config:/config
-      - /run/udev:/run/udev:ro
-    ports:
-      - 8080:8080
-    devices:
-      - /dev/sda:/dev/sda
-      - /dev/sdb:/dev/sdb
-      - /dev/nvme1n1:/dev/nvme1n1
-    restart: unless-stopped
-
-  sabnzbd:
-    image: ghcr.io/linuxserver/sabnzbd
-    container_name: sabnzbd
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/data:/config
-      - /path/to/downloads:/downloads #optional
-      - /path/to/incomplete/downloads:/incomplete-downloads #optional
-    ports:
-      - 8080:8080
-      - 9090:9090
-    restart: unless-stopped
-
-  rsnapshot:
-    image: ghcr.io/linuxserver/rsnapshot
-    container_name: rsnapshot
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/New_York
-    volumes:
-      - </path/to/appdata/config>:/config
-      - </path/to/snapshots>:/.snapshots #optional
-      - </path/to/data>:/data #optional
-    restart: unless-stopped
-
-  resilio-sync:
-    image: ghcr.io/linuxserver/resilio-sync
-    container_name: resilio-sync
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/config:/config
-      - /path/to/downloads:/downloads
-      - /path/to/data:/sync
-    ports:
-      - 8888:8888
-      - 55555:55555
-    restart: unless-stopped
-
-  requestrr:
-    image: ghcr.io/linuxserver/requestrr
-    container_name: requestrr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/appdata/config:/config
-    ports:
-      - 4545:4545
-    restart: unless-stopped
-
-  raneto:
-    image: ghcr.io/linuxserver/raneto
-    container_name: raneto
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/appdata:/config
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-
-  radarr:
-    image: ghcr.io/linuxserver/radarr
-    container_name: radarr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/data:/config
-      - /path/to/movies:/movies #optional
-      - /path/to/downloadclient-downloads:/downloads #optional
-    ports:
-      - 7878:7878
-    restart: unless-stopped
-
-  pyload:
-    image: ghcr.io/linuxserver/pyload
-    container_name: pyload
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/pyload/config:/config
-      - /path/to/downloads:/downloads
-    ports:
-      - 8000:8000
-      - 7227:7227 #optional
-    restart: unless-stopped
-
-  pydio-cells:
-    image: ghcr.io/linuxserver/pydio-cells
-    container_name: pydio-cells
-    hostname: pydio-cells
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - EXTERNALURL=yourdomain.url
-      - SERVER_IP=0.0.0.0 #optional
-    volumes:
-      - /path/to/appdata/config:/config
-    ports:
-      - 8080:8080
-      - 33060:33060 #optional
-    restart: unless-stopped
-
-  projectsend:
-    image: ghcr.io/linuxserver/projectsend
-    container_name: projectsend
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - MAX_UPLOAD=<5000>
-    volumes:
-      - <path to data>:/config
-      - <path to data>:/data
-    ports:
-      - 80:80
-    restart: unless-stopped
-
-  plex:
-    image: ghcr.io/linuxserver/plex
-    container_name: plex
-    network_mode: host
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - VERSION=docker
-      - PLEX_CLAIM= #optional
-    volumes:
-      - /path/to/library:/config
-      - /path/to/tvseries:/tv
-      - /path/to/movies:/movies
-    restart: unless-stopped
-
-  pixapop:
-    image: ghcr.io/linuxserver/pixapop
-    container_name: pixapop
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - APP_USERNAME=admin #optional
-      - APP_PASSWORD=admin #optional
-    volumes:
-      - /path/to/config:/config
-      - /path/to/photos:/photos
-    ports:
-      - 80:80
-    restart: unless-stopped
-
-  papermerge:
-    image: ghcr.io/linuxserver/papermerge
-    container_name: papermerge
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/New_York
-      - REDIS_URL= #optional
-    volumes:
-      - </path/to/appdata/config>:/config
-      - </path/to/appdata/data>:/data
-    ports:
-      - 8000:8000
-    restart: unless-stopped
-
-  overseerr:
-    image: ghcr.io/linuxserver/overseerr
-    container_name: overseerr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/New_York
-    volumes:
-      - /path/to/appdata/config:/config
-    ports:
-      - 5055:5055
-    restart: unless-stopped
-
-  ombi:
-    image: ghcr.io/linuxserver/ombi
-    container_name: ombi
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - BASE_URL=/ombi #optional
-    volumes:
-      - /path/to/appdata/config:/config
-    ports:
-      - 3579:3579
-    restart: unless-stopped
-
-  nzbhydra2:
-    image: ghcr.io/linuxserver/nzbhydra2
-    container_name: nzbhydra2
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to data>:/config
-      - <nzb download>:/downloads
-    ports:
-      - 5076:5076
-    restart: unless-stopped
-
-  nextcloud:
-    image: ghcr.io/linuxserver/nextcloud
-    container_name: nextcloud
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/appdata:/config
-      - /path/to/data:/data
-    ports:
-      - 443:443
-    restart: unless-stopped
-
-  mysql-workbench:
-    image: ghcr.io/linuxserver/mysql-workbench
-    container_name: mysql-workbench
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/config:/config
-    ports:
-      - 3000:3000
-    cap_add:
-      - IPC_LOCK
-    restart: unless-stopped
-
-  mylar3:
-    image: ghcr.io/linuxserver/mylar3
-    container_name: mylar3
-    environment:
-      - PUID=1000
-      - PGID=1000
-    volumes:
-      - /path/to/data:/config
-      - /path/to/comics:/comics
-      - /path/to/downloads:/downloads
-    ports:
-      - 8090:8090
-    restart: unless-stopped
-
-  muximux:
-    image: ghcr.io/linuxserver/muximux
-    container_name: muximux
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to data>:/config
-    ports:
-      - 80:80
-    restart: unless-stopped
-
-  mstream:
-    image: ghcr.io/linuxserver/mstream
-    container_name: mstream
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - USER=admin
-      - PASSWORD=password
-      - USE_JSON=true/false
-      - TZ=Europe/London
-    volumes:
-      - <path to data>:/config
-      - <path to music>:/music
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-
-  minetest:
-    image: ghcr.io/linuxserver/minetest
-    container_name: minetest
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - CLI_ARGS="--gameid minetest" #optional
-    volumes:
-      - <path to data>:/config/.minetest
-    ports:
-      - 30000:30000/udp
-    restart: unless-stopped
-
-  medusa:
-    image: ghcr.io/linuxserver/medusa
-    container_name: medusa
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - <path to data>:/config
-      - <path to downloads>:/downloads
-      - <path to tv shows>:/tv
-    ports:
-      - 8081:8081
-    restart: unless-stopped
-
-  lidarr:
-    image: ghcr.io/linuxserver/lidarr
-    container_name: lidarr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/appdata/config:/config
-      - /path/to/music:/music
-      - /path/to/downloads:/downloads
-    ports:
-      - 8686:8686
-    restart: unless-stopped
-
-  libreoffice:
-    image: ghcr.io/linuxserver/libreoffice
-    container_name: libreoffice
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/config:/config
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-
-  lazylibrarian:
-    image: ghcr.io/linuxserver/lazylibrarian
-    container_name: lazylibrarian
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - DOCKER_MODS=linuxserver/calibre-web:calibre|linuxserver/mods:lazylibrarian-ffmpeg #optional
-    volumes:
-      - /path/to/data:/config
-      - /path/to/downloads/:/downloads
-      - /path/to/data/:/books
-    ports:
-      - 5299:5299
-    restart: unless-stopped
-
-  jellyfin:
-    image: ghcr.io/linuxserver/jellyfin
-    container_name: jellyfin
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - JELLYFIN_PublishedServerUrl=192.168.0.5 #optional
-    volumes:
-      - /path/to/library:/config
-      - /path/to/tvseries:/data/tvshows
-      - /path/to/movies:/data/movies
-      - /opt/vc/lib:/opt/vc/lib #optional
-    ports:
-      - 8096:8096
-      - 8920:8920 #optional
-      - 7359:7359/udp #optional
-      - 1900:1900/udp #optional
-    devices:
-      - /dev/dri:/dev/dri #optional
-      - /dev/vcsm:/dev/vcsm #optional
-      - /dev/vchiq:/dev/vchiq #optional
-      - /dev/video10:/dev/video10 #optional
-      - /dev/video11:/dev/video11 #optional
-      - /dev/video12:/dev/video12 #optional
-    restart: unless-stopped
-
-  jackett:
-    image: ghcr.io/linuxserver/jackett
-    container_name: jackett
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - AUTO_UPDATE=true #optional
-      - RUN_OPTS=<run options here> #optional
-    volumes:
-      - <path to data>:/config
-      - <path to blackhole>:/downloads
-    ports:
-      - 9117:9117
-    restart: unless-stopped
-
-  ipfs:
-    image: ghcr.io/linuxserver/ipfs
-    container_name: ipfs
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/data:/config
-    ports:
-      - 80:80
-      - 4001:4001
-      - 5001:5001
-      - 8080:8080
-      - 443:443 #optional
-    restart: unless-stopped
-
-  heimdall:
-    image: ghcr.io/linuxserver/heimdall
-    container_name: heimdall
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - </path/to/appdata/config>:/config
-    ports:
-      - 80:80
-      - 443:443
-    restart: unless-stopped
-
-  mariadb:
-    image: ghcr.io/linuxserver/mariadb:latest
-    container_name: hedgedoc_mariadb
-    restart: always
-    volumes:
-      - path/to/mariadb/data:/config
-    environment:
-      - MYSQL_ROOT_PASSWORD=<secret password>
-      - MYSQL_DATABASE=hedgedoc
-      - MYSQL_USER=hedgedoc
-      - MYSQL_PASSWORD=<secret password>
-      - PGID=1000
-      - PUID=1000
-      - TZ=Europe/London
-  hedgedoc:
-    image: ghcr.io/linuxserver/hedgedoc:latest
-    container_name: hedgedoc
-    restart: always
-    depends_on:
-      - mariadb
-    volumes:
-      - /path/to/config:/config
-    environment:
-      - DB_HOST=mariadb
-      - DB_USER=hedgedoc
-      - DB_PASS=<secret password>
-      - DB_NAME=hedgedoc
-      - DB_PORT=3306
-      - PGID=1000
-      - PUID=1000
-      - TZ=Europe/London
-    ports:
-      - "3000:3000"
-
-  healthchecks:
-    image: ghcr.io/linuxserver/healthchecks
-    container_name: healthchecks
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - SITE_ROOT=<SITE_ROOT>
-      - SITE_NAME=<SITE_NAME>
-      - DEFAULT_FROM_EMAIL=<DEFAULT_FROM_EMAIL>
-      - EMAIL_HOST=<EMAIL_HOST>
-      - EMAIL_PORT=<EMAIL_PORT>
-      - EMAIL_HOST_USER=<EMAIL_HOST_USER>
-      - EMAIL_HOST_PASSWORD=<EMAIL_HOST_PASSWORD>
-      - EMAIL_USE_TLS=<True or False>
-      - ALLOWED_HOSTS=<ALLOWED_HOSTS>
-      - SUPERUSER_EMAIL=<SUPERUSER_EMAIL>
-      - SUPERUSER_PASSWORD=<SUPERUSER_PASSWORD>
-      - REGENERATE_SETTINGS=True/False
-    volumes:
-      - <path to data on host>:/config
-    ports:
-      - 8000:8000
-    restart: unless-stopped
-
-  headphones:
-    image: ghcr.io/linuxserver/headphones
-    container_name: headphones
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - </path/to/appdata/config>:/config
-      - </path/to/downloads>:/downloads
-      - </path/to/music>:/music
-    ports:
-      - 8181:8181
-    restart: unless-stopped
-
-  freshrss:
-    image: ghcr.io/linuxserver/freshrss
-    container_name: freshrss
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-    volumes:
-      - /path/to/data:/config
-    ports:
-      - 80:80
-    restart: unless-stopped
+linx-server:
+  container_name: linx-server
+  image: andreimarcu/linx-server
+  command: -config /data/linx-server.conf
+  volumes:
+    - ${HDD}/linx:/data/files
+    - ${ROOT}/linx:/data/meta
+    - ${ROOT}/linx/linx-server.conf:/data/linx-server.conf
+  ports:
+    - "1010:8080"
+  restart: unless-stopped
+
+sharry:
+  image: eikek0/sharry:latest
+  container_name: sharry
+  command: /opt/sharry.conf
+  ports:
+    - "9099:9090"
+  volumes:
+    - ${ROOT}/sharry/sharry.conf:/opt/sharry.conf
+  depends_on:
+    - sharry_db
+sharry_db:
+  image: postgres:13.3
+  container_name: sharry_db
+  volumes:
+    - ${ROOT}/sharry/db:/var/lib/postgresql/data/
+  environment:
+    - POSTGRES_USER=${SHARRY_DB_USER}
+    - POSTGRES_PASSWORD=${SHARRY_DB_PASS}
+    - POSTGRES_DB=sharry
+
+dailytxt:
+  image: phitux/dailytxt:latest
+  container_name: dailytxt
+  restart: always
+  environment:
+    - PORT=8765
+    - SECRET_KEY=${DAILY_SECRET}
+    # Set it to False or remove the line completely to disallow registration of new users.
+    - ALLOW_REGISTRATION=True
+  ports:
+    - 8765:8765"
+    # perhaps you only want:
+    # "<host_port>:8765"
+  volumes:
+    - "${ROOT}/dailytxt:/app/data/"
+
+foldingathome:
+  image: ghcr.io/linuxserver/foldingathome
+  container_name: foldingathome
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/FAH:/config
+  ports:
+    - 7396:7396
+    - 36330:36330
+  restart: unless-stopped
+
+firefox:
+  image: ghcr.io/linuxserver/firefox
+  container_name: firefox
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/firefox:/config
+  ports:
+    - 3020:3000
+  shm_size: "1gb"
+  restart: unless-stopped
+
+filezilla:
+  image: ghcr.io/linuxserver/filezilla
+  container_name: filezilla
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/filezilla:/config
+  ports:
+    - 3021:3000
+  restart: unless-stopped
+
+endlessh:
+  image: ghcr.io/linuxserver/endlessh
+  container_name: endlessh
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - MSDELAY=10000
+    - MAXLINES=32
+    - MAXCLIENTS=4096
+    - LOGFILE=true
+  volumes:
+    - ${ROOT}/endlessh:/config
+  ports:
+    - 22:2222
+  restart: unless-stopped
+
+embystat:
+  image: ghcr.io/linuxserver/embystat
+  container_name: embystat
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/embystat:/config
+  ports:
+    - 6555:6555
+  restart: unless-stopped
+
+emby:
+  image: ghcr.io/linuxserver/emby
+  container_name: emby
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/emby:/config
+    - ${HDD}/media/tv:/data/tvshows
+    - ${HDD}/media/movies:/data/movies
+    - /opt/vc/lib:/opt/vc/lib #optional
+  ports:
+    - 8096:8096
+    - 8920:8920
+  restart: unless-stopped
+
+duplicati:
+  image: ghcr.io/linuxserver/duplicati
+  container_name: duplicati
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/duplicati:/config
+    - ${HDD}/backups:/backups
+  ports:
+    - 8200:8200
+  restart: unless-stopped
+
+dokuwiki:
+  image: ghcr.io/linuxserver/dokuwiki
+  container_name: dokuwiki
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/dokuwiki:/config
+  ports:
+    - 7040:80
+  restart: unless-stopped
+
+diskover:
+  image: linuxserver/diskover
+  container_name: diskover
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    - ES_HOST=elasticsearch
+    - ES_PORT=9200
+    - ES_USER=elastic
+    - ES_PASS=changeme
+    - RUN_ON_START=true
+    - USE_CRON=true
+  volumes:
+    - ${ROOT}/diskover:/config
+    - ${HDD}/diskover:/data
+  ports:
+    - 9490:80
+    - 9181:9181
+    - 9999:9999
+  mem_limit: 4096m
+  restart: unless-stopped
+  depends_on:
+    - elasticsearch
+    - redis
+
+dillinger:
+  image: ghcr.io/linuxserver/dillinger
+  container_name: dillinger
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/dillinger:/config
+  ports:
+    - 8490:8080
+  restart: unless-stopped
+
+digikam:
+  image: ghcr.io/linuxserver/digikam
+  container_name: digikam
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/digikam:/config
+  ports:
+    - 5647:3000
+  restart: unless-stopped
+
+darktable:
+  image: ghcr.io/linuxserver/darktable
+  container_name: darktable
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/darktable:/config
+  ports:
+    - 8402:3000
+  restart: unless-stopped
+
+daapd:
+  image: ghcr.io/linuxserver/daapd
+  container_name: daapd
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/daapd:/config
+    - ${HDD}/media/music:/music
+  restart: unless-stopped
+
+couchpotato:
+  image: ghcr.io/linuxserver/couchpotato
+  container_name: couchpotato
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/couchpotato:/config
+    - ${HDD}/media/downloads:/downloads
+    - ${HDD}/media/movies:/movies
+  ports:
+    - 5050:5050
+  restart: unless-stopped
+
+cops:
+  image: ghcr.io/linuxserver/cops
+  container_name: cops
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/cops:/config
+    - ${HDD}/media/books:/books
+  ports:
+    - 3820:80
+  restart: unless-stopped
+
+code-server:
+  image: ghcr.io/linuxserver/code-server
+  container_name: code-server
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - PASSWORD=${CODE_PASS}
+    - SUDO_PASSWORD=${CODE_SUDO_PASS}
+    - PROXY_DOMAIN=code.devrim.website
+  volumes:
+    - ${ROOT}/code:/config
+  ports:
+    - 8443:8443
+  restart: unless-stopped
+
+calibre-web:
+  image: ghcr.io/linuxserver/calibre-web
+  container_name: calibre-web
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - DOCKER_MODS=linuxserver/calibre-web:calibre
+  volumes:
+    - ${ROOT}/calbire-web:/config
+    - ${HDD}/media/books:/books
+  ports:
+    - 8083:8083
+  restart: unless-stopped
+
+calibre:
+  image: ghcr.io/linuxserver/calibre
+  container_name: calibre
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - PASSWORD=${CALIBRE_PASS}
+  volumes:
+    - /path/to/data:/config
+  ports:
+    - 4320:8080
+    - 1720:8081
+  restart: unless-stopped
+
+bookstack:
+  image: ghcr.io/linuxserver/bookstack
+  container_name: bookstack
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - APP_URL=bookstack.devrim.website
+    - DB_HOST=bookstack_db
+    - DB_USER=${BOOKSTACK_DB_USER}
+    - DB_PASS=${BOOKSTACK_DB_PASS}
+    - DB_DATABASE=bookstackapp
+  volumes:
+    - ${ROOT}/bookstack:/config
+  ports:
+    - 6875:80
+  restart: unless-stopped
+  depends_on:
+    - bookstack_db
+bookstack_db:
+  image: ghcr.io/linuxserver/mariadb
+  container_name: bookstack_db
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - MYSQL_ROOT_PASSWORD=${BOOKSTACK_ROOT_PASS}
+    - TZ=${TZ}
+    - MYSQL_DATABASE=bookstackapp
+    - MYSQL_USER=${BOOKSTACK_DB_USER}
+    - MYSQL_PASSWORD=${BOOKSTACK_DB_PASS}
+  volumes:
+    - ${ROOT}/bookstack/db:/config
+  restart: unless-stopped
+
+booksonic-air:
+  image: ghcr.io/linuxserver/booksonic-air
+  container_name: booksonic-air
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - CONTEXT_PATH=url-base
+  volumes:
+    - ${ROOT}/booksonic/:/config
+    - ${HDD}/media/audiobooks:/audiobooks
+    - ${HDD}/media/podcasts:/podcasts
+    - ${HDD}/media/othermedia:/othermedia
+  ports:
+    - 4040:4040
+  restart: unless-stopped
+
+boinc:
+  image: ghcr.io/linuxserver/boinc
+  container_name: boinc
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - PASSWORD=${BOINC_PASS}
+  volumes:
+    - ${ROOT}/boinc:/config
+  ports:
+    - 8080:8080
+  restart: unless-stopped
+
+beets:
+  image: ghcr.io/linuxserver/beets
+  container_name: beets
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - </path/to/appdata/config>:/config
+    - </path/to/music/library>:/music
+    - </path/to/ingest>:/downloads
+  ports:
+    - 8337:8337
+  restart: unless-stopped
+
+bazarr:
+  image: ghcr.io/linuxserver/bazarr
+  container_name: bazarr
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/bazarr/config:/config
+    - /path/to/movies:/movies #optional
+    - /path/to/tv:/tv #optional
+  ports:
+    - 6767:6767
+  restart: unless-stopped
+
+audacity:
+  image: ghcr.io/linuxserver/audacity
+  container_name: audacity
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/config:/config
+  ports:
+    - 3000:3000
+  restart: unless-stopped
+
+airsonic:
+  image: ghcr.io/linuxserver/airsonic
+  container_name: airsonic
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - CONTEXT_PATH=<URL_BASE> #optional
+    - JAVA_OPTS=<options> #optional
+  volumes:
+    - </path/to/config>:/config
+    - </path/to/music>:/music
+    - </path/to/playlists>:/playlists
+    - </path/to/podcasts>:/podcasts
+    - </path/to/other media>:/media #optional
+  ports:
+    - 4040:4040
+  devices:
+    - /dev/snd:/dev/snd #optional
+  restart: unless-stopped
+
+wireshark:
+  image: ghcr.io/linuxserver/wireshark
+  container_name: wireshark
+  cap_add:
+    - NET_ADMIN
+  network_mode: host
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/config:/config
+  ports:
+    - 3000:3000 #optional
+  restart: unless-stopped
+
+wikijs:
+  image: ghcr.io/linuxserver/wikijs
+  container_name: wikijs
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - <path to config>:/config
+    - <path to data>:/data
+  ports:
+    - 3000:3000
+  restart: unless-stopped
+
+webtop:
+  image: ghcr.io/linuxserver/webtop
+  container_name: webtop
+  privileged: true #optional
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/data:/config
+    - /var/run/docker.sock:/var/run/docker.sock #optional
+  ports:
+    - 3000:3000
+  shm_size: "1gb" #optional
+  restart: unless-stopped
+
+ubooquity:
+  image: ghcr.io/linuxserver/ubooquity
+  container_name: ubooquity
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - MAXMEM=<maxmem>
+  volumes:
+    - <path to data>:/config
+    - <path to books>:/books
+    - <path to comics>:/comics
+    - <path to raw files>:/files
+  ports:
+    - 2202:2202
+    - 2203:2203
+  restart: unless-stopped
+
+tautulli:
+  image: ghcr.io/linuxserver/tautulli
+  container_name: tautulli
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - <path to data>:/config
+  ports:
+    - 8181:8181
+  restart: unless-stopped
+
+taisun:
+  image: linuxserver/taisun
+  container_name: taisun
+  network_mode: bridge
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  ports:
+    - 3000:3000
+  restart: unless-stopped
+
+synclounge:
+  image: ghcr.io/linuxserver/synclounge
+  container_name: synclounge
+  environment:
+    - TZ=${TZ}
+    - AUTH_LIST=plexuser1,plexuser2,email1,machineid1 #optional
+    - AUTOJOIN_ENABLED=false #optional
+    - AUTOJOIN_ROOM=roomname #optional
+  ports:
+    - 8088:8088
+  restart: unless-stopped
+
+sonarr:
+  image: ghcr.io/linuxserver/sonarr
+  container_name: sonarr
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/data:/config
+    - /path/to/tvseries:/tv #optional
+    - /path/to/downloadclient-downloads:/downloads #optional
+  ports:
+    - 8989:8989
+  restart: unless-stopped
+
+mysql:
+  image: linuxserver/mariadb
+  container_name: snipe_mysql
+  restart: always
+  volumes:
+    - <path to mysql data>:/config
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - MYSQL_ROOT_PASSWORD=<secret password>
+    - MYSQL_USER=snipe
+    - MYSQL_PASSWORD=<secret user password>
+    - MYSQL_DATABASE=snipe
+snipeit:
+  image: linuxserver/snipe-it:latest
+  container_name: snipe-it
+  restart: always
+  depends_on:
+    - mysql
+  volumes:
+    - <path to data>:/config
+  environment:
+    - NGINX_APP_URL=< your application URL IE 192.168.10.1:8080>
+    - MYSQL_PORT_3306_TCP_ADDR=mysql
+    - MYSQL_PORT_3306_TCP_PORT=3306
+    - MYSQL_DATABASE=snipe
+    - MYSQL_USER=snipe
+    - MYSQL_PASSWORD=<secret user password>
+    - PGID=1000
+    - PUID=1000
+  ports:
+    - "8080:80"
+
+snapdrop:
+  image: ghcr.io/linuxserver/snapdrop
+  container_name: snapdrop
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - <path to config>:/config
+  ports:
+    - 80:80
+    - 443:443
+  restart: unless-stopped
+
+smokeping:
+  image: ghcr.io/linuxserver/smokeping
+  container_name: smokeping
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - </path/to/smokeping/config>:/config
+    - </path/to/smokeping/data>:/data
+  ports:
+    - 80:80
+  restart: unless-stopped
+
+sickgear:
+  image: ghcr.io/linuxserver/sickgear
+  container_name: sickgear
+  environment:
+    - PUID=1000
+    - PGID=1000
+  volumes:
+    - /path/to/data:/config
+    - /path/to/data:/tv
+    - /path/to/data:/downloads
+  ports:
+    - 8081:8081
+  restart: unless-stopped
+
+sickchill:
+  image: ghcr.io/linuxserver/sickchill
+  container_name: sickchill
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/data:/config
+    - /path/to/data:/downloads
+    - /path/to/data:/tv
+  ports:
+    - 8081:8081
+  restart: unless-stopped
+
+scrutiny:
+  image: ghcr.io/linuxserver/scrutiny
+  container_name: scrutiny
+  cap_add:
+    - SYS_RAWIO
+    - SYS_ADMIN #optional
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - SCRUTINY_API_ENDPOINT=http://localhost:8080
+    - SCRUTINY_WEB=true
+    - SCRUTINY_COLLECTOR=true
+  volumes:
+    - /path/to/config:/config
+    - /run/udev:/run/udev:ro
+  ports:
+    - 8080:8080
+  devices:
+    - /dev/sda:/dev/sda
+    - /dev/sdb:/dev/sdb
+    - /dev/nvme1n1:/dev/nvme1n1
+  restart: unless-stopped
+
+sabnzbd:
+  image: ghcr.io/linuxserver/sabnzbd
+  container_name: sabnzbd
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/data:/config
+    - /path/to/downloads:/downloads #optional
+    - /path/to/incomplete/downloads:/incomplete-downloads #optional
+  ports:
+    - 8080:8080
+    - 9090:9090
+  restart: unless-stopped
+
+rsnapshot:
+  image: ghcr.io/linuxserver/rsnapshot
+  container_name: rsnapshot
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=America/New_York
+  volumes:
+    - </path/to/appdata/config>:/config
+    - </path/to/snapshots>:/.snapshots #optional
+    - </path/to/data>:/data #optional
+  restart: unless-stopped
+
+resilio-sync:
+  image: ghcr.io/linuxserver/resilio-sync
+  container_name: resilio-sync
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/config:/config
+    - /path/to/downloads:/downloads
+    - /path/to/data:/sync
+  ports:
+    - 8888:8888
+    - 55555:55555
+  restart: unless-stopped
+
+requestrr:
+  image: ghcr.io/linuxserver/requestrr
+  container_name: requestrr
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/appdata/config:/config
+  ports:
+    - 4545:4545
+  restart: unless-stopped
+
+raneto:
+  image: ghcr.io/linuxserver/raneto
+  container_name: raneto
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/appdata:/config
+  ports:
+    - 3000:3000
+  restart: unless-stopped
+
+radarr:
+  image: ghcr.io/linuxserver/radarr
+  container_name: radarr
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/data:/config
+    - /path/to/movies:/movies #optional
+    - /path/to/downloadclient-downloads:/downloads #optional
+  ports:
+    - 7878:7878
+  restart: unless-stopped
+
+pyload:
+  image: ghcr.io/linuxserver/pyload
+  container_name: pyload
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - /path/to/pyload/config:/config
+    - /path/to/downloads:/downloads
+  ports:
+    - 8000:8000
+    - 7227:7227 #optional
+  restart: unless-stopped
+
+pydio-cells:
+  image: ghcr.io/linuxserver/pydio-cells
+  container_name: pydio-cells
+  hostname: pydio-cells
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - EXTERNALURL=yourdomain.url
+    - SERVER_IP=${LAN_IP}
+  volumes:
+    - ${ROOT}/pydio-cells:/config
+  ports:
+    - 3333:8080
+    - 33060:33060
+  restart: unless-stopped
+
+projectsend:
+  image: ghcr.io/linuxserver/projectsend
+  container_name: projectsend
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - MAX_UPLOAD=5000
+  volumes:
+    - ${ROOT}/projectsend:/config
+    - ${HDD}/apps/projectsend:/data
+  ports:
+    - 2222:80
+  restart: unless-stopped
+
+plex:
+  image: ghcr.io/linuxserver/plex
+  container_name: plex
+  network_mode: host
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - VERSION=docker
+  volumes:
+    - ${ROOT}/plex:/config
+    - ${HDD}/media/tv:/tv
+    - ${HDD}/media/movies:/movies
+  restart: unless-stopped
+
+pixapop:
+  image: ghcr.io/linuxserver/pixapop
+  container_name: pixapop
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - APP_USERNAME=${PIXAPOP_USER}
+    - APP_PASSWORD=${PIXAPOP_PASS}
+  volumes:
+    - ${ROOT}/pixapop:/config
+    - ${HDD}/media/photos:/photos
+  ports:
+    - 80:80
+  restart: unless-stopped
+
+papermerge:
+  image: ghcr.io/linuxserver/papermerge
+  container_name: papermerge
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/papermerge:/config
+    - ${HDD}/apps/papermerge:/data
+  ports:
+    - 1111:8000
+  restart: unless-stopped
+
+overseerr:
+  image: ghcr.io/linuxserver/overseerr
+  container_name: overseerr
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/overseerr:/config
+  ports:
+    - 5055:5055
+  restart: unless-stopped
+
+ombi:
+  image: ghcr.io/linuxserver/ombi
+  container_name: ombi
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/ombi:/config
+  ports:
+    - 3579:3579
+  restart: unless-stopped
+
+nzbhydra2:
+  image: ghcr.io/linuxserver/nzbhydra2
+  container_name: nzbhydra2
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/nzbhydra2:/config
+    - ${ROOT}/media/downloads:/downloads
+  ports:
+    - 5076:5076
+  restart: unless-stopped
+
+nextcloud:
+  image: ghcr.io/linuxserver/nextcloud
+  container_name: nextcloud
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/nextcloud:/config
+    - ${HDD}/apps/nextcloud:/data
+  ports:
+    - 8948:443
+  restart: unless-stopped
+
+mysql-workbench:
+  image: ghcr.io/linuxserver/mysql-workbench
+  container_name: mysql-workbench
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/mysql:/config
+  ports:
+    - 7804:3000
+  cap_add:
+    - IPC_LOCK
+  restart: unless-stopped
+
+mylar3:
+  image: ghcr.io/linuxserver/mylar3
+  container_name: mylar3
+  environment:
+    - PUID=1000
+    - PGID=1000
+  volumes:
+    - ${ROOT}/mylar3:/config
+    - ${HDD}/media/comics:/comics
+    - ${HDD}/media/downloads:/downloads
+  ports:
+    - 8488:8090
+  restart: unless-stopped
+
+muximux:
+  image: ghcr.io/linuxserver/muximux
+  container_name: muximux
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/muximux:/config
+  ports:
+    - 8459:80
+  restart: unless-stopped
+
+mstream:
+  image: ghcr.io/linuxserver/mstream
+  container_name: mstream
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - USER=${MSTREAM_USER}
+    - PASSWORD=${MSTREAM_PASS}
+    - USE_JSON=true
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/mstream:/config
+    - ${HDD}/media/music:/music
+  ports:
+    - 7849:3000
+  restart: unless-stopped
+
+minetest:
+  image: ghcr.io/linuxserver/minetest
+  container_name: minetest
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - CLI_ARGS="--gameid minetest"
+  volumes:
+    - ${ROOT}/minetest:/config/.minetest
+  ports:
+    - 30000:30000/udp
+  restart: unless-stopped
+
+medusa:
+  image: ghcr.io/linuxserver/medusa
+  container_name: medusa
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/medusa:/config
+    - ${HDD}/media/downloads:/downloads
+    - ${HDD}/media/tv:/tv
+  ports:
+    - 3784:8081
+  restart: unless-stopped
+
+lidarr:
+  image: ghcr.io/linuxserver/lidarr
+  container_name: lidarr
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/lidarr:/config
+    - ${HDD}/media/music:/music
+    - ${HDD}/media/downloads:/downloads
+  ports:
+    - 8686:8686
+  restart: unless-stopped
+
+libreoffice:
+  image: ghcr.io/linuxserver/libreoffice
+  container_name: libreoffice
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/libreoffice:/config
+  ports:
+    - 1930:3000
+  restart: unless-stopped
+
+lazylibrarian:
+  image: ghcr.io/linuxserver/lazylibrarian
+  container_name: lazylibrarian
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - DOCKER_MODS=linuxserver/calibre-web:calibre|linuxserver/mods:lazylibrarian-ffmpeg #optional
+  volumes:
+    - ${ROOT}/lazylibrarian:/config
+    - ${HDD}/media/downloads:/downloads
+    - ${HDD}/media/books:/books
+  ports:
+    - 5299:5299
+  restart: unless-stopped
+
+jellyfin:
+  image: ghcr.io/linuxserver/jellyfin
+  container_name: jellyfin
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - JELLYFIN_PublishedServerUrl=192.168.1.194
+  volumes:
+    - ${ROOT}/jellyfin:/config
+    - ${HDD}/media/tv:/data/tvshows
+    - ${HDD}/media/movies:/data/movies
+    - /opt/vc/lib:/opt/vc/lib
+  ports:
+    - 8096:8096
+  restart: unless-stopped
+
+jackett:
+  image: ghcr.io/linuxserver/jackett
+  container_name: jackett
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+    - AUTO_UPDATE=true
+  volumes:
+    - ${ROOT}/jackett:/config
+    - ${HDD}/media/downloads:/downloads
+  ports:
+    - 9117:9117
+  restart: unless-stopped
+
+ipfs:
+  image: ghcr.io/linuxserver/ipfs
+  container_name: ipfs
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/ipfs:/config
+  ports:
+    - 6482:80
+    - 4001:4001
+    - 9145:5001
+    - 1729:8080
+  restart: unless-stopped
+
+heimdall:
+  image: ghcr.io/linuxserver/heimdall
+  container_name: heimdall
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/heimdall:/config
+  ports:
+    - 4785:80
+    # - 443:443
+  restart: unless-stopped
+
+hedgedoc_mariadb:
+  image: ghcr.io/linuxserver/mariadb:latest
+  container_name: hedgedoc_mariadb
+  restart: always
+  volumes:
+    - ${ROOT}/hedgedoc/db:/config
+  environment:
+    - MYSQL_ROOT_PASSWORD=${HEDGEDOC_DB_ROOT}
+    - MYSQL_DATABASE=hedgedoc
+    - MYSQL_USER=${HEDGEDOC_DB_USER}
+    - MYSQL_PASSWORD=${HEDGEDOC_DB_PASS}
+    - PGID=1000
+    - PUID=1000
+    - TZ=${TZ}
+hedgedoc:
+  image: ghcr.io/linuxserver/hedgedoc:latest
+  container_name: hedgedoc
+  restart: always
+  depends_on:
+    - hedgedoc_mariadb
+  volumes:
+    - ${ROOT}/hedgedoc:/config
+  environment:
+    - DB_HOST=hedgedoc_mariadb
+    - DB_USER=${HEDGEDOC_DB_USER}
+    - DB_PASS=${HEDGEDOC_DB_PASS}
+    - DB_NAME=hedgedoc
+    - DB_PORT=3306
+    - PGID=1000
+    - PUID=1000
+    - TZ=${TZ}
+  ports:
+    - "5834:3000"
+
+headphones:
+  image: ghcr.io/linuxserver/headphones
+  container_name: headphones
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/headphones:/config
+    - ${HDD}/media/downloads:/downloads
+    - ${HDD}/media/music:/music
+  ports:
+    - 8181:8181
+  restart: unless-stopped
+
+freshrss:
+  image: ghcr.io/linuxserver/freshrss
+  container_name: freshrss
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ}
+  volumes:
+    - ${ROOT}/freshrss:/config
+  ports:
+    - 7392:80
+  restart: unless-stopped
