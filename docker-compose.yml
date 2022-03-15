@@ -1,0 +1,11 @@
+version: "3"
+
+services:
+  pufferpanel:
+    container_name: pufferpanel
+    volumes:
+      - "${HOME}/data/pufferpanel/config/:/etc/pufferpanel"
+      - "${HOME}/data/pufferpanel/servers:/var/lib/pufferpanel"
+    restart: on-failure
+    network_mode: host
+    image: "pufferpanel/pufferpanel:latest"
